@@ -37,12 +37,22 @@ class ReplayMemory:
 class Net(nn.Module):
     def __init__(self, state_dim=8, action_dim=4, hidden_dim=32):
         super().__init__()
-        ## TODO ##
-        raise NotImplementedError
+        # TODO Net __init__
+
+        self.linear_1 = nn.Linear(state_dim, hidden_dim)
+        self.linear_2 = nn.Linear(hidden_dim, hidden_dim)
+        self.linear_3 = nn.Linear(hidden_dim, action_dim)
 
     def forward(self, x):
-        ## TODO ##
-        raise NotImplementedError
+        # TODO Net forward
+
+        x = self.linear_1(x)
+        x = nn.ReLU(x)
+        x = self.linear_2(x)
+        x = nn.ReLU(x)
+        x = self.linear_3(x)
+
+        return x
 
 
 class DQN:
@@ -66,7 +76,7 @@ class DQN:
 
     def select_action(self, state, epsilon, action_space):
         '''epsilon-greedy based on behavior network'''
-         ## TODO ##
+        ## TODO ##
         raise NotImplementedError
 
     def append(self, state, action, reward, next_state, done):
