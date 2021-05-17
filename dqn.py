@@ -2,13 +2,14 @@
 __author__ = 'chengscott'
 __copyright__ = 'Copyright 2020, NCTU CGI Lab'
 
-import time
 import random
 import argparse
 import itertools
 from typing import Any, Generator
 from collections import deque, OrderedDict
 import gym
+from gym.spaces import Discrete
+from gym.wrappers.time_limit import TimeLimit
 import numpy as np
 import torch
 import torch.nn as nn
@@ -27,6 +28,7 @@ class ReplayMemory:
 
     def append(self, *transition: Any) -> None:
         # (state, action, reward, next_state, done)
+
         self.buffer.append(tuple(map(tuple, transition)))
 
     def sample(self, batch_size: int, device: str) -> Generator:
@@ -72,6 +74,7 @@ class DQN:
 
         # TODO DQN __init__
         self._optimizer = optim.Adam(self._behavior_net.parameters(), lr=5e-4)
+        self._criterion = nn.MSELoss()
 
         ## config ##
         self.device = args.device
@@ -80,13 +83,20 @@ class DQN:
         self.freq = args.freq
         self.target_freq = args.target_freq
 
-    def select_action(self, state, epsilon, action_space):
+    def select_action(self, state: torch.Tensor, epsilon: float, action_space: Discrete) -> torch.Tensor:
         '''epsilon-greedy based on behavior network'''
 
-        ## TODO ##
-        raise NotImplementedError
+        # TODO DQN select_action
+        if random.random() < epsilon:
+            return torch.Tensor(action_space.sample()).to(self.device)
+        else:
+            with torch.no_grad():
+                state = state.to(self.device)
+                action = self._behavior_net(state).max(1)[1]
 
-    def append(self, state, action, reward, next_state, done) -> None:
+            return action
+
+    def append(self, state: torch.Tensor, action: torch.Tensor, reward: torch.Tensor, next_state: torch.Tensor, done: bool) -> None:
         self._memory.append(state, [action], [reward / 10], next_state, [int(done)])
 
     def update(self, total_steps: int) -> None:
@@ -99,27 +109,26 @@ class DQN:
         # sample a minibatch of transitions
         state, action, reward, next_state, done = self._memory.sample(self.batch_size, self.device)
 
-        ## TODO ##
-        # q_value = ?
-        # with torch.no_grad():
-        #    q_next = ?
-        #    q_target = ?
-        # criterion = ?
-        # loss = criterion(q_value, q_target)
-        raise NotImplementedError
-
-        # optimize
         self._optimizer.zero_grad()
+
+        # TODO DQN _update_behavior_network
+        q_value = self._behavior_net(state).gather(1, action.type(torch.long))
+        with torch.no_grad():
+            q_next = self._target_net(next_state).max(1)[0].view(-1, 1)
+            q_target = reward + torch.sub(1, done) * q_next * gamma
+
+        loss = self._criterion(q_value, q_target)
 
         loss.backward()
         nn.utils.clip_grad_norm_(self._behavior_net.parameters(), 5)
+
         self._optimizer.step()
 
     def _update_target_network(self):
         '''update target network by copying from behavior network'''
 
-        ## TODO ##
-        raise NotImplementedError
+        # TODO DQN _update_target_network
+        self._target_net.load_state_dict(OrderedDict(self._behavior_net.state_dict()))
 
     def save(self, model_path: str, checkpoint: bool = False) -> None:
         if checkpoint:
@@ -143,7 +152,7 @@ class DQN:
             self._optimizer.load_state_dict(model['optimizer'])
 
 
-def train(args: argparse.Namespace, env: Any, agent: DQN, writer: SummaryWriter) -> None:
+def train(args: argparse.Namespace, env: TimeLimit, agent: DQN, writer: SummaryWriter) -> None:
     print('Start Training')
 
     action_space = env.action_space
@@ -197,12 +206,21 @@ def test(args: argparse.Namespace, env: Any, agent: DQN, writer: SummaryWriter) 
         env.seed(seed)
 
         state = env.reset()
-        ## TODO ##
-        # ...
-        #     if done:
-        #         writer.add_scalar('Test/Episode Reward', total_reward, n_episode)
-        #         ...
-        raise NotImplementedError
+
+        # TODO test
+        for _ in itertools.count(start=1):
+            action = agent.select_action(state, epsilon, action_space)
+            next_state, reward, done, _ = env.step(action)
+
+            state = next_state
+            total_reward += reward
+
+            if done:
+                writer.add_scalar('Test/Episode Reward', total_reward, n_episode)
+                print(f'Episode: {n_episode}, Reward: {total_reward:.3f}')
+                rewards.append(total_reward)
+
+                break
 
     print('Average Reward', np.mean(rewards))
 
@@ -249,4 +267,9 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    random.seed(0)
+    np.random.seed(0)
+    torch.manual_seed(0)
+    torch.cuda.manual_seed_all(0)
+
     main()
