@@ -83,20 +83,20 @@ class DQN:
         self.freq = args.freq
         self.target_freq = args.target_freq
 
-    def select_action(self, state: torch.Tensor, epsilon: float, action_space: Discrete) -> torch.Tensor:
+    def select_action(self, state: np.ndarray, epsilon: float, action_space: Discrete) -> int:
         '''epsilon-greedy based on behavior network'''
 
         # TODO DQN select_action
         if random.random() < epsilon:
-            return torch.Tensor(action_space.sample()).to(self.device)
+            return action_space.sample()
         else:
             with torch.no_grad():
-                state = state.to(self.device)
-                action = self._behavior_net(state).max(1)[1]
+                state_tensor = torch.tensor([state]).to(self.device)
+                action = self._behavior_net(state_tensor).max(1)[1].item()
 
             return action
 
-    def append(self, state: torch.Tensor, action: torch.Tensor, reward: torch.Tensor, next_state: torch.Tensor, done: bool) -> None:
+    def append(self, state: torch.Tensor, action: int, reward: torch.Tensor, next_state: torch.Tensor, done: bool) -> None:
         self._memory.append(state, [action], [reward / 10], next_state, [int(done)])
 
     def update(self, total_steps: int) -> None:
@@ -109,8 +109,6 @@ class DQN:
         # sample a minibatch of transitions
         state, action, reward, next_state, done = self._memory.sample(self.batch_size, self.device)
 
-        self._optimizer.zero_grad()
-
         # TODO DQN _update_behavior_network
         q_value = self._behavior_net(state).gather(1, action.type(torch.long))
         with torch.no_grad():
@@ -119,6 +117,7 @@ class DQN:
 
         loss = self._criterion(q_value, q_target)
 
+        self._optimizer.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(self._behavior_net.parameters(), 5)
 
