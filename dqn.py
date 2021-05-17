@@ -208,6 +208,9 @@ def test(args: argparse.Namespace, env: Any, agent: DQN, writer: SummaryWriter) 
 
         # TODO test
         for _ in itertools.count(start=1):
+            if args.render:
+                env.render()
+
             action = agent.select_action(state, epsilon, action_space)
             next_state, reward, done, _ = env.step(action)
 
