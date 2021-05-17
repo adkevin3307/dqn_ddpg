@@ -74,7 +74,7 @@ class DQN:
 
         # TODO DQN __init__
         self._optimizer = optim.Adam(self._behavior_net.parameters(), lr=5e-4)
-        self._criterion = nn.MSELoss()
+        self._criterion = nn.SmoothL1Loss()
 
         ## config ##
         self.device = args.device
