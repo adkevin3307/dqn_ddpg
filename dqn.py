@@ -41,22 +41,24 @@ class ReplayMemory:
 
 class Net(nn.Module):
     def __init__(self, state_dim: int = 8, action_dim: int = 4, hidden_dim: int = 32) -> None:
-        super().__init__()
+        super(Net, self).__init__()
 
         # TODO Net __init__
-        self.linear_1 = nn.Linear(state_dim, hidden_dim)
-        self.linear_2 = nn.Linear(hidden_dim, hidden_dim)
-        self.linear_3 = nn.Linear(hidden_dim, action_dim)
-
-        self.relu = nn.ReLU()
+        self.layer_1 = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU()
+        )
+        self.layer_2 = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU()
+        )
+        self.layer_3 = nn.Linear(hidden_dim, action_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # TODO Net forward
-        x = self.linear_1(x)
-        x = self.relu(x)
-        x = self.linear_2(x)
-        x = self.relu(x)
-        x = self.linear_3(x)
+        x = self.layer_1(x)
+        x = self.layer_2(x)
+        x = self.layer_3(x)
 
         return x
 
@@ -73,8 +75,8 @@ class DQN:
         self._memory = ReplayMemory(capacity=args.capacity)
 
         # TODO DQN __init__
-        self._optimizer = optim.Adam(self._behavior_net.parameters(), lr=5e-4)
-        self._criterion = nn.SmoothL1Loss()
+        self._optimizer = optim.Adam(self._behavior_net.parameters(), lr=args.lr)
+        self._criterion = nn.MSELoss()
 
         ## config ##
         self.device = args.device
@@ -110,6 +112,8 @@ class DQN:
         # sample a minibatch of transitions
         state, action, reward, next_state, done = self._memory.sample(self.batch_size, self.device)
 
+        self._optimizer.zero_grad()
+
         # TODO DQN _update_behavior_network
         q_value = self._behavior_net(state).gather(1, action.type(torch.long))
         with torch.no_grad():
@@ -124,7 +128,6 @@ class DQN:
 
         loss = self._criterion(q_value, q_target)
 
-        self._optimizer.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(self._behavior_net.parameters(), 5)
 
@@ -194,7 +197,7 @@ def train(args: argparse.Namespace, env: TimeLimit, agent: DQN, writer: SummaryW
                 writer.add_scalar('Train/Episode Reward', total_reward, total_steps)
                 writer.add_scalar('Train/Ewma Reward', ewma_reward, total_steps)
 
-                print(f'Step: {total_steps}\tEpisode: {episode}\tLength: {t:3d}\tTotal reward: {total_reward:.2f}\tEwma reward: {ewma_reward:.2f}\tEpsilon: {epsilon:.3f}')
+                print(f'Step: {total_steps}\tEpisode: {episode}\tLength: {t:3d}\tTotal reward: {total_reward:.2f}\tEwma reward: {ewma_reward:.2f}\tEpsilon: {epsilon:.2f}')
 
                 break
     env.close()
@@ -226,7 +229,7 @@ def test(args: argparse.Namespace, env: Any, agent: DQN, writer: SummaryWriter) 
 
             if done:
                 writer.add_scalar('Test/Episode Reward', total_reward, n_episode)
-                print(f'Episode: {n_episode}, Reward: {total_reward:.3f}')
+                print(f'Episode: {n_episode}, Reward: {total_reward:.2f}')
                 rewards.append(total_reward)
 
                 break
@@ -260,6 +263,11 @@ def main() -> None:
     parser.add_argument('--seed', default=20200519, type=int)
     parser.add_argument('--test_epsilon', default=.001, type=float)
     args = parser.parse_args()
+
+    print('=' * 50)
+    for key, value in vars(args).items():
+        print(f'{key}: {value}')
+    print('=' * 50)
 
     ## main ##
     env = gym.make('LunarLander-v2')
