@@ -82,6 +82,7 @@ class DQN:
         self.gamma = args.gamma
         self.freq = args.freq
         self.target_freq = args.target_freq
+        self.use_ddqn = args.use_ddqn
 
     def select_action(self, state: np.ndarray, epsilon: float, action_space: Discrete) -> int:
         '''epsilon-greedy based on behavior network'''
@@ -112,7 +113,13 @@ class DQN:
         # TODO DQN _update_behavior_network
         q_value = self._behavior_net(state).gather(1, action.type(torch.long))
         with torch.no_grad():
-            q_next = self._target_net(next_state).max(1)[0].view(-1, 1)
+            if self.use_ddqn:
+                index = self._behavior_net(next_state).argmax(1).view(-1, 1)
+
+                q_next = self._target_net(next_state).gather(1, index)
+            else:
+                q_next = self._target_net(next_state).max(1)[0].view(-1, 1)
+
             q_target = reward + (1 - done) * gamma * q_next
 
         loss = self._criterion(q_value, q_target)
@@ -207,7 +214,7 @@ def test(args: argparse.Namespace, env: Any, agent: DQN, writer: SummaryWriter) 
         state = env.reset()
 
         # TODO test
-        for _ in itertools.count(start=1):
+        while True:
             if args.render:
                 env.render()
 
@@ -246,6 +253,7 @@ def main() -> None:
     parser.add_argument('--gamma', default=.99, type=float)
     parser.add_argument('--freq', default=4, type=int)
     parser.add_argument('--target_freq', default=1000, type=int)
+    parser.add_argument('--use_ddqn', action='store_true')
     # test
     parser.add_argument('--test_only', action='store_true')
     parser.add_argument('--render', action='store_true')
