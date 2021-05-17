@@ -92,7 +92,7 @@ class DQN:
         else:
             with torch.no_grad():
                 state_tensor = torch.tensor([state]).to(self.device)
-                action = self._behavior_net(state_tensor).max(1)[1].item()
+                action = self._behavior_net(state_tensor).argmax(dim=1).item()
 
             return action
 
@@ -113,7 +113,7 @@ class DQN:
         q_value = self._behavior_net(state).gather(1, action.type(torch.long))
         with torch.no_grad():
             q_next = self._target_net(next_state).max(1)[0].view(-1, 1)
-            q_target = reward + torch.sub(1, done) * q_next * gamma
+            q_target = reward + (1 - done) * gamma * q_next
 
         loss = self._criterion(q_value, q_target)
 
