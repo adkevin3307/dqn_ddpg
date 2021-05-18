@@ -2,14 +2,12 @@
 __author__ = 'chengscott'
 __copyright__ = 'Copyright 2020, NCTU CGI Lab'
 
-import time
 import random
 import argparse
 import itertools
 from typing import Any, Generator
 from collections import deque, OrderedDict
 import gym
-from gym.spaces import Discrete
 from gym.wrappers.time_limit import TimeLimit
 import numpy as np
 import torch
@@ -62,7 +60,10 @@ class ActorNet(nn.Module):
             nn.Linear(hidden_dim[0], hidden_dim[1]),
             nn.ReLU()
         )
-        self.layer_3 = nn.Linear(hidden_dim[1], action_dim)
+        self.layer_3 = nn.Sequential(
+            nn.Linear(hidden_dim[1], action_dim),
+            nn.Tanh()
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # TODO ActorNet forward
@@ -151,23 +152,18 @@ class DDPG:
         self._update_target_network(self._target_critic_net, self._critic_net, self.tau)
 
     def _update_behavior_network(self, gamma: float) -> None:
-        actor_net, critic_net, target_actor_net, target_critic_net = self._actor_net, self._critic_net, self._target_actor_net, self._target_critic_net
-        actor_opt, critic_opt = self._actor_opt, self._critic_opt
-
         # sample a minibatch of transitions
         state, action, reward, next_state, done = self._memory.sample(self.batch_size, self.device)
 
         ## update critic ##
-        # critic loss
-
-        actor_net.zero_grad()
-        critic_net.zero_grad()
+        self._actor_net.zero_grad()
+        self._critic_net.zero_grad()
 
         # TODO DDPG _update_behavior_network critic
-        q_value = critic_net(state, action)
+        q_value = self._critic_net(state, action)
         with torch.no_grad():
-           next_action = target_actor_net(next_state)
-           q_next = target_critic_net(next_state, next_action)
+           next_action = self._target_actor_net(next_state)
+           q_next = self._target_critic_net(next_state, next_action)
            q_target = reward + (1 - done) * gamma * q_next
 
         criterion = nn.MSELoss()
@@ -175,21 +171,19 @@ class DDPG:
 
         # optimize critic
         critic_loss.backward()
-        critic_opt.step()
+        self._critic_opt.step()
 
         ## update actor ##
-        # actor loss
-
-        actor_net.zero_grad()
-        critic_net.zero_grad()
+        self._actor_net.zero_grad()
+        self._critic_net.zero_grad()
 
         # TODO DDPG _update_behavior_network actor
-        action = actor_net(state)
-        actor_loss = -1.0 * torch.mean(critic_net(state, action))
+        action = self._actor_net(state)
+        actor_loss = -1.0 * torch.mean(self._critic_net(state, action))
 
         # optimize actor
         actor_loss.backward()
-        actor_opt.step()
+        self._actor_opt.step()
 
     @staticmethod
     def _update_target_network(target_net: nn.Module, net: nn.Module, tau: float) -> None:
@@ -263,7 +257,7 @@ def train(args: argparse.Namespace, env: TimeLimit, agent: DDPG, writer: Summary
                 writer.add_scalar('Train/Episode Reward', total_reward, total_steps)
                 writer.add_scalar('Train/Ewma Reward', ewma_reward, total_steps)
 
-                print(f'Step: {total_steps}\tEpisode: {episode}\tLength: {t:3d}\tTotal reward: {total_reward:.2f}\tEwma reward: {ewma_reward:.2f}')
+                print(f'Step: {total_steps}\tEpisode: {episode + 1}\tLength: {t:3d}\tTotal reward: {total_reward:.2f}\tEwma reward: {ewma_reward:.2f}')
 
                 break
     env.close()
