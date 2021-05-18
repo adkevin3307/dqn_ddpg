@@ -1,94 +1,121 @@
 '''DLP DDPG Lab'''
 __author__ = 'chengscott'
 __copyright__ = 'Copyright 2020, NCTU CGI Lab'
-import argparse
-from collections import deque
-import itertools
-import random
-import time
 
+import time
+import random
+import argparse
+import itertools
+from typing import Any, Generator
+from collections import deque, OrderedDict
 import gym
+from gym.spaces import Discrete
+from gym.wrappers.time_limit import TimeLimit
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 
 
 class GaussianNoise:
-    def __init__(self, dim, mu=None, std=None):
+    def __init__(self, dim: int, mu: np.ndarray = None, std: np.ndarray = None) -> None:
         self.mu = mu if mu else np.zeros(dim)
-        self.std = std if std else np.ones(dim) * .1
+        self.std = std if std else np.ones(dim) * 0.1
 
-    def sample(self):
+    def sample(self) -> np.ndarray:
         return np.random.normal(self.mu, self.std)
 
 
 class ReplayMemory:
     __slots__ = ['buffer']
 
-    def __init__(self, capacity):
+    def __init__(self, capacity: int) -> None:
         self.buffer = deque(maxlen=capacity)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.buffer)
 
-    def append(self, *transition):
+    def append(self, *transition: Any) -> None:
         # (state, action, reward, next_state, done)
+
         self.buffer.append(tuple(map(tuple, transition)))
 
-    def sample(self, batch_size, device):
+    def sample(self, batch_size: int, device: str) -> Generator:
         '''sample a batch of transition tensors'''
-        ## TODO ##
-        raise NotImplementedError
+        # TODO ReplayMemory sample
+        transitions = random.sample(self.buffer, batch_size)
+
+        return (torch.tensor(x, dtype=torch.float, device=device) for x in zip(*transitions))
 
 
 class ActorNet(nn.Module):
-    def __init__(self, state_dim=8, action_dim=2, hidden_dim=(400, 300)):
-        super().__init__()
-        ## TODO ##
-        raise NotImplementedError
+    def __init__(self, state_dim: int = 8, action_dim: int = 2, hidden_dim: tuple = (400, 300)) -> None:
+        super(ActorNet, self).__init__()
 
-    def forward(self, x):
-        ## TODO ##
-        raise NotImplementedError
+        # TODO ActorNet __init__
+        self.layer_1 = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim[0]),
+            nn.ReLU()
+        )
+        self.layer_2 = nn.Sequential(
+            nn.Linear(hidden_dim[0], hidden_dim[1]),
+            nn.ReLU()
+        )
+        self.layer_3 = nn.Linear(hidden_dim[1], action_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # TODO ActorNet forward
+        x = self.layer_1(x)
+        x = self.layer_2(x)
+        x = self.layer_3(x)
+
+        return x
 
 
 class CriticNet(nn.Module):
-    def __init__(self, state_dim=8, action_dim=2, hidden_dim=(400, 300)):
-        super().__init__()
-        h1, h2 = hidden_dim
-        self.critic_head = nn.Sequential(
-            nn.Linear(state_dim + action_dim, h1),
-            nn.ReLU(),
-        )
-        self.critic = nn.Sequential(
-            nn.Linear(h1, h2),
-            nn.ReLU(),
-            nn.Linear(h2, 1),
-        )
+    def __init__(self, state_dim: int = 8, action_dim: int = 2, hidden_dim: tuple = (400, 300)) -> None:
+        super(CriticNet, self).__init__()
 
-    def forward(self, x, action):
-        x = self.critic_head(torch.cat([x, action], dim=1))
-        return self.critic(x)
+        self.layer_1 = nn.Sequential(
+            nn.Linear(state_dim + action_dim, hidden_dim[0]),
+            nn.ReLU(),
+        )
+        self.layer_2 = nn.Sequential(
+            nn.Linear(hidden_dim[0], hidden_dim[1]),
+            nn.ReLU()
+        )
+        self.layer_3 = nn.Linear(hidden_dim[1], 1)
+
+    def forward(self, x: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+        x = self.layer_1(torch.cat([x, action], dim=1))
+        x = self.layer_2(x)
+        x = self.layer_3(x)
+
+        return x
 
 
 class DDPG:
-    def __init__(self, args):
+    def __init__(self, args: argparse.Namespace) -> None:
         # behavior network
         self._actor_net = ActorNet().to(args.device)
         self._critic_net = CriticNet().to(args.device)
+
         # target network
         self._target_actor_net = ActorNet().to(args.device)
         self._target_critic_net = CriticNet().to(args.device)
+
         # initialize target network
-        self._target_actor_net.load_state_dict(self._actor_net.state_dict())
-        self._target_critic_net.load_state_dict(self._critic_net.state_dict())
-        ## TODO ##
-        # self._actor_opt = ?
-        # self._critic_opt = ?
-        raise NotImplementedError
+        self._target_actor_net.load_state_dict(OrderedDict(self._actor_net.state_dict()))
+        self._target_critic_net.load_state_dict(OrderedDict(self._critic_net.state_dict()))
+
+        # TODO DDPG __init__
+        self._actor_opt = optim.Adam(self._actor_net.parameters(), lr=args.lra)
+        self._critic_opt = optim.Adam(self._critic_net.parameters(), lr=args.lrc)
+
         # action noise
         self._action_noise = GaussianNoise(dim=2)
+
         # memory
         self._memory = ReplayMemory(capacity=args.capacity)
 
@@ -98,90 +125,102 @@ class DDPG:
         self.tau = args.tau
         self.gamma = args.gamma
 
-    def select_action(self, state, noise=True):
+    def select_action(self, state: np.ndarray, noise: bool = True) -> np.ndarray:
         '''based on the behavior (actor) network and exploration noise'''
-        ## TODO ##
-        raise NotImplementedError
 
-    def append(self, state, action, reward, next_state, done):
-        self._memory.append(state, action, [reward / 100], next_state,
-                            [int(done)])
+        # TODO DDPG select_action
+        with torch.no_grad():
+            state_tensor = torch.tensor(state).to(self.device)
+            action = self._actor_net(state_tensor)
 
-    def update(self):
+            if noise:
+                action += torch.tensor(self._action_noise.sample()).to(self.device)
+
+            action = torch.clamp(action, -1.0, 1.0)
+
+        return action.detach().cpu().numpy()
+
+    def append(self, state: torch.Tensor, action: np.ndarray, reward: torch.Tensor, next_state: torch.Tensor, done: bool) -> None:
+        self._memory.append(state, action, [reward / 100], next_state, [int(done)])
+
+    def update(self) -> None:
         # update the behavior networks
         self._update_behavior_network(self.gamma)
         # update the target networks
-        self._update_target_network(self._target_actor_net, self._actor_net,
-                                    self.tau)
-        self._update_target_network(self._target_critic_net, self._critic_net,
-                                    self.tau)
+        self._update_target_network(self._target_actor_net, self._actor_net, self.tau)
+        self._update_target_network(self._target_critic_net, self._critic_net, self.tau)
 
-    def _update_behavior_network(self, gamma):
+    def _update_behavior_network(self, gamma: float) -> None:
         actor_net, critic_net, target_actor_net, target_critic_net = self._actor_net, self._critic_net, self._target_actor_net, self._target_critic_net
         actor_opt, critic_opt = self._actor_opt, self._critic_opt
 
         # sample a minibatch of transitions
-        state, action, reward, next_state, done = self._memory.sample(
-            self.batch_size, self.device)
+        state, action, reward, next_state, done = self._memory.sample(self.batch_size, self.device)
 
         ## update critic ##
         # critic loss
-        ## TODO ##
-        # q_value = ?
-        # with torch.no_grad():
-        #    a_next = ?
-        #    q_next = ?
-        #    q_target = ?
-        # criterion = ?
-        # critic_loss = criterion(q_value, q_target)
-        raise NotImplementedError
-        # optimize critic
+
         actor_net.zero_grad()
         critic_net.zero_grad()
+
+        # TODO DDPG _update_behavior_network critic
+        q_value = critic_net(state, action)
+        with torch.no_grad():
+           next_action = target_actor_net(next_state)
+           q_next = target_critic_net(next_state, next_action)
+           q_target = reward + (1 - done) * gamma * q_next
+
+        criterion = nn.MSELoss()
+        critic_loss = criterion(q_value, q_target)
+
+        # optimize critic
         critic_loss.backward()
         critic_opt.step()
 
         ## update actor ##
         # actor loss
-        ## TODO ##
-        # action = ?
-        # actor_loss = ?
-        raise NotImplementedError
-        # optimize actor
+
         actor_net.zero_grad()
         critic_net.zero_grad()
+
+        # TODO DDPG _update_behavior_network actor
+        action = actor_net(state)
+        actor_loss = -1.0 * torch.mean(critic_net(state, action))
+
+        # optimize actor
         actor_loss.backward()
         actor_opt.step()
 
     @staticmethod
-    def _update_target_network(target_net, net, tau):
+    def _update_target_network(target_net: nn.Module, net: nn.Module, tau: float) -> None:
         '''update target network by _soft_ copying from behavior network'''
+
         for target, behavior in zip(target_net.parameters(), net.parameters()):
-            ## TODO ##
-            raise NotImplementedError
+            # TODO DDPG _update_target_network
+            target.data = tau * behavior.data + (1 - tau) * target.data
 
-    def save(self, model_path, checkpoint=False):
+    def save(self, model_path: str, checkpoint: bool = False) -> None:
         if checkpoint:
-            torch.save(
-                {
-                    'actor': self._actor_net.state_dict(),
-                    'critic': self._critic_net.state_dict(),
-                    'target_actor': self._target_actor_net.state_dict(),
-                    'target_critic': self._target_critic_net.state_dict(),
-                    'actor_opt': self._actor_opt.state_dict(),
-                    'critic_opt': self._critic_opt.state_dict(),
-                }, model_path)
+            torch.save({
+                'actor': self._actor_net.state_dict(),
+                'critic': self._critic_net.state_dict(),
+                'target_actor': self._target_actor_net.state_dict(),
+                'target_critic': self._target_critic_net.state_dict(),
+                'actor_opt': self._actor_opt.state_dict(),
+                'critic_opt': self._critic_opt.state_dict(),
+            }, model_path)
         else:
-            torch.save(
-                {
-                    'actor': self._actor_net.state_dict(),
-                    'critic': self._critic_net.state_dict(),
-                }, model_path)
+            torch.save({
+                'actor': self._actor_net.state_dict(),
+                'critic': self._critic_net.state_dict(),
+            }, model_path)
 
-    def load(self, model_path, checkpoint=False):
+    def load(self, model_path: str, checkpoint: bool = False) -> None:
         model = torch.load(model_path)
+
         self._actor_net.load_state_dict(model['actor'])
         self._critic_net.load_state_dict(model['critic'])
+
         if checkpoint:
             self._target_actor_net.load_state_dict(model['target_actor'])
             self._target_critic_net.load_state_dict(model['target_critic'])
@@ -189,57 +228,78 @@ class DDPG:
             self._critic_opt.load_state_dict(model['critic_opt'])
 
 
-def train(args, env, agent, writer):
+def train(args: argparse.Namespace, env: TimeLimit, agent: DDPG, writer: SummaryWriter) -> None:
     print('Start Training')
+
     total_steps = 0
     ewma_reward = 0
     for episode in range(args.episode):
+
         total_reward = 0
         state = env.reset()
+
         for t in itertools.count(start=1):
             # select action
             if total_steps < args.warmup:
                 action = env.action_space.sample()
             else:
                 action = agent.select_action(state)
+
             # execute action
             next_state, reward, done, _ = env.step(action)
+
             # store transition
             agent.append(state, action, reward, next_state, done)
+
             if total_steps >= args.warmup:
                 agent.update()
 
             state = next_state
             total_reward += reward
             total_steps += 1
+
             if done:
                 ewma_reward = 0.05 * total_reward + (1 - 0.05) * ewma_reward
-                writer.add_scalar('Train/Episode Reward', total_reward,
-                                  total_steps)
-                writer.add_scalar('Train/Ewma Reward', ewma_reward,
-                                  total_steps)
-                print(
-                    'Step: {}\tEpisode: {}\tLength: {:3d}\tTotal reward: {:.2f}\tEwma reward: {:.2f}'
-                    .format(total_steps, episode, t, total_reward,
-                            ewma_reward))
+                writer.add_scalar('Train/Episode Reward', total_reward, total_steps)
+                writer.add_scalar('Train/Ewma Reward', ewma_reward, total_steps)
+
+                print(f'Step: {total_steps}\tEpisode: {episode}\tLength: {t:3d}\tTotal reward: {total_reward:.2f}\tEwma reward: {ewma_reward:.2f}')
+
                 break
     env.close()
 
 
-def test(args, env, agent, writer):
+def test(args: argparse.Namespace, env: TimeLimit, agent: DDPG, writer: SummaryWriter) -> None:
     print('Start Testing')
+
     seeds = (args.seed + i for i in range(10))
     rewards = []
+
     for n_episode, seed in enumerate(seeds):
         total_reward = 0
+
         env.seed(seed)
         state = env.reset()
-        ## TODO ##
-        # ...
-        #     if done:
-        #         writer.add_scalar('Test/Episode Reward', total_reward, n_episode)
-        #         ...
-        raise NotImplementedError
+
+        # TODO test
+        while True:
+            if args.render:
+                env.render()
+
+            action = agent.select_action(state)
+
+            next_state, reward, done, _ = env.step(action)
+
+            state = next_state
+            total_reward += reward
+
+            if done:
+                writer.add_scalar('Test/Episode Reward', total_reward, n_episode)
+                print(f'Episode: {n_episode}, Reward: {total_reward:.2f}')
+                rewards.append(total_reward)
+
+                break
+
     print('Average Reward', np.mean(rewards))
     env.close()
 
@@ -269,12 +329,20 @@ def main():
     env = gym.make('LunarLanderContinuous-v2')
     agent = DDPG(args)
     writer = SummaryWriter(args.logdir)
+
     if not args.test_only:
         train(args, env, agent, writer)
         agent.save(args.model)
+
     agent.load(args.model)
+
     test(args, env, agent, writer)
 
 
 if __name__ == '__main__':
+    random.seed(0)
+    np.random.seed(0)
+    torch.manual_seed(0)
+    torch.cuda.manual_seed_all(0)
+
     main()
