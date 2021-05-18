@@ -49,7 +49,9 @@ class Net(nn.Module):
             nn.ReLU()
         )
         self.layer_2 = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
+            nn.Linear(hidden_dim, hidden_dim * 2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim * 2, hidden_dim),
             nn.ReLU()
         )
         self.layer_3 = nn.Linear(hidden_dim, action_dim)
@@ -197,7 +199,7 @@ def train(args: argparse.Namespace, env: TimeLimit, agent: DQN, writer: SummaryW
                 writer.add_scalar('Train/Episode Reward', total_reward, total_steps)
                 writer.add_scalar('Train/Ewma Reward', ewma_reward, total_steps)
 
-                print(f'Step: {total_steps}\tEpisode: {episode}\tLength: {t:3d}\tTotal reward: {total_reward:.2f}\tEwma reward: {ewma_reward:.2f}\tEpsilon: {epsilon:.2f}')
+                print(f'Step: {total_steps}\tEpisode: {episode + 1}\tLength: {t:3d}\tTotal reward: {total_reward:.2f}\tEwma reward: {ewma_reward:.2f}\tEpsilon: {epsilon:.2f}')
 
                 break
     env.close()
