@@ -319,6 +319,11 @@ def main():
     parser.add_argument('--seed', default=20200519, type=int)
     args = parser.parse_args()
 
+    print('=' * 50)
+    for key, value in vars(args).items():
+        print(f'{key}: {value}')
+    print('=' * 50)
+
     ## main ##
     env = gym.make('LunarLanderContinuous-v2')
     agent = DDPG(args)
