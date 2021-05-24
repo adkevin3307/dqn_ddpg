@@ -280,7 +280,7 @@ def test(args: argparse.Namespace, env: TimeLimit, agent: DDPG, writer: SummaryW
             if args.render:
                 env.render()
 
-            action = agent.select_action(state)
+            action = agent.select_action(state, noise=False)
 
             next_state, reward, done, _ = env.step(action)
 
